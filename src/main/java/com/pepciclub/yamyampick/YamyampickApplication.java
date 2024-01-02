@@ -1,4 +1,4 @@
-package pepsiclub.yamyampick;
+package com.pepciclub.yamyampick;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
