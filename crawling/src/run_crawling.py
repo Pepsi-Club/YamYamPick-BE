@@ -9,8 +9,8 @@ file_list = []
 
 async def run():
     data = get_data()
-    print('load data complete')
-    chunk_size = 2200
+    print('load data complete', len(data))
+    chunk_size = 3000
     tasks = []
     for i in range(0, len(data), chunk_size):
         chunk = data.iloc[i:i + chunk_size]

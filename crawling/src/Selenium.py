@@ -7,19 +7,22 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-GAP = 3
+GAP = 2  # 2 sec
 pattern = re.compile(r'\b\d{7,}\b')
 
 
 def get_data():
     get_address = lambda x: x['도로명주소'] if pd.notna(x['도로명주소']) else x['지번주소']
 
-    data = pd.read_csv('../data/서울시 일반음식점 인허가 정보.csv', encoding='cp949')
+    data = pd.read_csv('../data/서울시 일반음식점 인허가 정보.csv',
+                       usecols=['도로명주소', '지번주소', '사업장명', '영업상태코드'],
+                       encoding='cp949')
 
     # preprocessing
     data = data[data['영업상태코드'] == 1]
     data = data.dropna(subset=['사업장명'])
     data['주소'] = data.apply(get_address, axis=1)
+    data = data.sample(frac=1)
     return data
 
 
@@ -66,11 +69,11 @@ class Crawling:
 
         self.driver.switch_to.frame(self.get_element_by_xpath(self.xpaths['entryIframe']))
 
-        review_div = self.driver.find_element(By.XPATH, self.xpaths['review_div'])
+        review_div = self.get_element_by_xpath(self.xpaths['review_div'])
 
         visitor_key = 'visitor_review_no_star'
         blog_key = 'blog_review_no_star'
-        if len(review_div.find_elements(By.TAG_NAME, 'span')) == 3:
+        if len(review_div.find_elements(By.TAG_NAME, 'span')) >= 3:
             visitor_key = 'visitor_review'
             blog_key = 'blog_review'
 
@@ -109,11 +112,16 @@ class Crawling:
             print('select first child')
             self.driver.switch_to.frame('searchIframe')
 
-            search_result_ul = self.driver.find_element(By.XPATH, self.xpaths['search_result_ul'])
-            # first_child_element = search_result_ul.find_element(By.CLASS_NAME, 'YwYLL')
-            first_child_element = self.wait.until(EC.element_to_be_clickable((By.CLASS_NAME, 'YwYLL')))
-            first_child_element.click()
-            self.driver.switch_to.default_content()
+            search_result_ul = self.get_element_by_xpath(self.xpaths['search_result_ul'])
+            try:
+                first_child_element = search_result_ul.find_element(By.CLASS_NAME, 'YwYLL')
+                first_child_element.click()
+            except Exception as e:
+                print('YmYLL 실패')
+                first_child_element = search_result_ul.find_element(By.CLASS_NAME, 'TYaxT')
+                first_child_element.click()
+            finally:
+                self.driver.switch_to.default_content()
         except Exception as e:
             print('failed to click')
             print(e)
@@ -132,6 +140,13 @@ class Crawling:
             try:
                 self.search(addr, p)
                 await asyncio.sleep(GAP)
+                try:
+                    self.driver.find_element(By.CLASS_NAME, 'FYvSc')
+                    print('조건에 맞는 업체가 없음.')
+                    continue
+                except Exception as e:
+                    pass
+
                 if 'isCorrectAnswer=true' not in self.driver.current_url:
                     self.select_first_child()
                     await asyncio.sleep(GAP)
@@ -144,7 +159,9 @@ class Crawling:
                 print(e)
                 print(f'{p} failed')
 
-        df = pd.DataFrame(result_data, columns=['사업장명', '네이버등록코드', '카테고리', '방문자리뷰', '블로그리뷰'])
+            if cnt % 100:
+                df = pd.DataFrame(result_data, columns=['사업장명', '네이버등록코드', '카테고리', '방문자리뷰', '블로그리뷰'])
+                df.to_csv(f'../data/{self.random_num}.csv', index=False, encoding='utf-8')
 
         print(df)
         df.to_csv(f'../data/{self.random_num}.csv', index=False, encoding='utf-8')
